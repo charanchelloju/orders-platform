@@ -16,6 +16,8 @@ spec:
       valueFiles:
         - values.yaml
       parameters:
+        - name: replicaCount
+          value: "2"
         - name: image.repository
           value: 132656278058.dkr.ecr.ap-south-1.amazonaws.com/payment-service
         - name: image.tag
