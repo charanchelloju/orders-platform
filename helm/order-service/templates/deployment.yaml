@@ -37,6 +37,8 @@ spec:
               value: {{ .Values.kafka.bootstrapServers | quote }}
             - name: JAVA_TOOL_OPTIONS
               value: {{ .Values.javaOpts | quote }}
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "update"
           envFrom:
             - secretRef:
                 name: {{ .Values.externalSecret.secretName }}
