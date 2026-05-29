@@ -1,0 +1,14 @@
+apiVersion: v2
+name: payment-service
+description: Payment processor — consumes orders, produces payment events
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kafka
+  - spring-boot
+  - microservice
+  - consumer
+  - producer
+maintainers:
+  - name: orders-platform

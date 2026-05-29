@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:h2:mem:payments;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer:   org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 30000
+        max.block.ms: 5000
+    consumer:
+      group-id: payment-service
+      key-deserializer:   org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+app:
+  kafka:
+    topics:
+      orders:   orders
+      payments: payments
+    partitions:
+      payments: 3
+    replication-factor: 1
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/orders_platform?currentSchema=payments
+    driver-class-name: org.postgresql.Driver
+    username: payment_service
+    password: payment_pw
+  jpa:
+    properties:
+      hibernate:
+        default_schema: payments
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    bootstrap-servers: kafka-1:29092,kafka-2:29092,kafka-3:29092
+
+app:
+  kafka:
+    replication-factor: 3
+
+---
+spring:
+  config:
+    activate:
+      on-profile: aws
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payments
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
+
+app:
+  kafka:
+    replication-factor: 3

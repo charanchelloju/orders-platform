@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: order-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    # CI bumps this repo on push to main; ArgoCD detects within ~3 min
+    repoURL: https://github.com/charanchelloju/orders-platform.git
+    targetRevision: main
+    path: helm/order-service
+    helm:
+      releaseName: order-service
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: image.repository
+          value: 132656278058.dkr.ecr.ap-south-1.amazonaws.com/order-service
+        - name: image.tag
+          value: "latest"                   # â† CI updates this
+        - name: serviceAccount.annotations.eks\.amazonaws\.com/role-arn
+          value: "arn:aws:iam::132656278058:role/orders-platform-order-service"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orders-platform
+
+  syncPolicy:
+    automated:
+      prune: true                            # delete K8s resources removed from Git
+      selfHeal: true                         # revert manual cluster changes
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

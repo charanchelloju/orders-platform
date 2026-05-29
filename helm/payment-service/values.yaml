@@ -1,0 +1,60 @@
+replicaCount: 2
+
+image:
+  repository: payment-service
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8082
+  targetPort: 8082
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+springProfile: "aws"
+
+kafka:
+  bootstrapServers: "kafka-cluster-kafka-bootstrap.kafka:9092"
+
+database:
+  existingSecret: "payment-service-db"
+  urlKey: SPRING_DATASOURCE_URL
+  usernameKey: SPRING_DATASOURCE_USERNAME
+  passwordKey: SPRING_DATASOURCE_PASSWORD
+
+probes:
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 15
+    periodSeconds: 5
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: /actuator/prometheus
+  prometheus.io/port: "8082"
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+serviceMonitor:
+  enabled: true
+  path: /actuator/prometheus
+  interval: 30s
+  scrapeTimeout: 10s

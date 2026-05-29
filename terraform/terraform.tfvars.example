@@ -1,0 +1,5 @@
+aws_region   = "ap-south-1"
+project      = "orders-platform"
+github_org   = "your-github-username"
+github_repo  = "orders-platform"
+alert_email  = "your-email@example.com"     # for CloudWatch alarms

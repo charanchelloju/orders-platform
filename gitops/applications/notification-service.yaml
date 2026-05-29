@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notification-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/charanchelloju/orders-platform.git
+    targetRevision: main
+    path: helm/notification-service
+    helm:
+      releaseName: notification-service
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: image.repository
+          value: 132656278058.dkr.ecr.ap-south-1.amazonaws.com/notification-service
+        - name: image.tag
+          value: "latest"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orders-platform
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

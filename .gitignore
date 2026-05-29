@@ -1,0 +1,56 @@
+# ─── SECRETS — never commit these ──────────────────────────────────────────
+*.tfvars
+!*.tfvars.example          # the .example file IS safe to commit (placeholders only)
+.env
+.env.local
+*.local
+secrets/
+credentials.json
+
+# ─── Terraform state ───────────────────────────────────────────────────────
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+crash.log
+
+# ─── Build artifacts ──────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+build/
+
+# ─── IDE ───────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# ─── Logs ──────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── OS ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Maven ─────────────────────────────────────────────────────────────────
+.mvn/
+
+# ─── Helm ──────────────────────────────────────────────────────────────────
+helm/**/charts/
+helm/**/Chart.lock
+
+# ─── Local data volumes ────────────────────────────────────────────────────
+data/
+kafka-data/
+postgres-data/
+
+# ─── kubeconfig ────────────────────────────────────────────────────────────
+kubeconfig
+*.kubeconfig

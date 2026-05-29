@@ -1,0 +1,13 @@
+apiVersion: v2
+name: order-service
+description: Order intake REST API + Kafka producer + payment consumer (transactional outbox)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kafka
+  - spring-boot
+  - microservice
+  - producer
+maintainers:
+  - name: orders-platform

@@ -1,0 +1,134 @@
+# Build, test, push images, then bump tags in gitops/ for ArgoCD to deploy.
+# Matrix build runs all 4 services in parallel; a final job updates GitOps manifests.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  JAVA_VERSION: "17"
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+
+permissions:
+  contents: write          # need write to bump gitops/ files
+  id-token: write          # OIDC → AWS
+  packages: write
+
+jobs:
+  build-and-test:
+    name: build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - order-service
+          - payment-service
+          - inventory-service
+          - notification-service
+
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Maven build + test
+        working-directory: services/${{ matrix.service }}
+        run: mvn -B -ntp verify
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        working-directory: services/${{ matrix.service }}
+        run: docker build -t ${{ matrix.service }}:${{ steps.meta.outputs.short_sha }} .
+
+      - name: Configure AWS credentials (OIDC)
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and push to ECR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          IMAGE=${{ env.ECR_REGISTRY }}/${{ matrix.service }}
+          SHA=${{ steps.meta.outputs.short_sha }}
+          docker tag ${{ matrix.service }}:$SHA $IMAGE:$SHA
+          docker tag ${{ matrix.service }}:$SHA $IMAGE:latest
+          docker push $IMAGE:$SHA
+          docker push $IMAGE:latest
+
+  # ─── GitOps bump: update image tags in gitops/applications/*.yaml ───────
+  # ArgoCD detects the commit and rolls out the new tag automatically.
+  bump-gitops:
+    name: bump gitops manifests
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          # Persist credentials so the push below works
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Bump image tags
+        env:
+          SHA: ${{ needs.build-and-test.outputs.short_sha }}
+        run: |
+          for svc in order-service payment-service inventory-service notification-service; do
+            FILE="gitops/applications/$svc.yaml"
+            yq -i "
+              (.spec.source.helm.parameters[]
+                | select(.name == \"image.tag\")).value = \"$SHA\"
+            " "$FILE"
+          done
+
+      - name: Commit and push
+        run: |
+          git config user.email "github-actions@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add gitops/applications/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(gitops): bump images to ${{ needs.build-and-test.outputs.short_sha }} [skip ci]"
+            git push origin main
+          else
+            echo "No changes to gitops/ — skipping commit"
+          fi
+
+      - name: Summary
+        run: |
+          echo "### GitOps updated to SHA \`${{ needs.build-and-test.outputs.short_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "ArgoCD will sync within ~3 minutes. Check status:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`kubectl get applications -n argocd\`" >> "$GITHUB_STEP_SUMMARY"

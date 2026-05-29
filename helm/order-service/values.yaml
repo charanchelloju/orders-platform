@@ -1,0 +1,81 @@
+# Default values for order-service.
+
+replicaCount: 3
+
+image:
+  repository: order-service
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8081
+  targetPort: 8081
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+
+springProfile: "aws"
+
+kafka:
+  bootstrapServers: "kafka-cluster-kafka-bootstrap.kafka:9092"
+
+# ─── ServiceAccount with IRSA ──────────────────────────────────────────────
+# The annotation links this K8s SA to an AWS IAM role.
+# Pod gets short-lived AWS credentials automatically via the EKS pod identity webhook.
+serviceAccount:
+  create: true
+  name: order-service-sa
+  annotations:
+    # Set via --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=<ARN>
+    # in CI/CD, OR populated from Terraform output service_role_arns["order-service"]
+    eks.amazonaws.com/role-arn: ""
+
+# ─── External Secret (creates K8s Secret from AWS Secrets Manager) ─────────
+# External Secrets Operator must be installed in the cluster (one-time).
+# This block tells ESO to fetch /orders-platform/rds/order_service and project
+# it into a K8s Secret that the Deployment reads via env.
+externalSecret:
+  enabled: true
+  secretName: order-service-db                  # K8s Secret created by ESO
+  secretStoreRef: aws-secrets-manager           # ClusterSecretStore name
+  remoteSecretName: "orders-platform/rds/order_service"
+  refreshInterval: "1h"
+
+probes:
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 15
+    periodSeconds: 5
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: /actuator/prometheus
+  prometheus.io/port: "8081"
+
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# ─── Prometheus scraping ───────────────────────────────────────────────────
+# Requires the Prometheus Operator (kube-prometheus-stack) to be installed.
+serviceMonitor:
+  enabled: true
+  path: /actuator/prometheus
+  interval: 30s
+  scrapeTimeout: 10s

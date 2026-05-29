@@ -1,0 +1,72 @@
+# JMX Prometheus exporter rules — maps Kafka's JMX MBeans to Prometheus metrics.
+# Standard Strimzi-recommended ruleset. Apply BEFORE the Kafka cluster resource:
+#   kubectl apply -f infrastructure/kafka/kafka-metrics-configmap.yaml
+#
+# The Kafka resource references this ConfigMap via metricsConfig.valueFrom.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-metrics
+  namespace: kafka
+  labels:
+    app: strimzi
+data:
+  kafka-metrics-config.yml: |
+    lowercaseOutputName: true
+    rules:
+    # Generic mapping for any kafka.* MBean
+    - pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*, topic=(.+)><>Count
+      name: kafka_$1_$2_$3_total
+      type: COUNTER
+      labels:
+        topic: "$4"
+
+    - pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*><>Count
+      name: kafka_$1_$2_$3_total
+      type: COUNTER
+
+    - pattern: kafka.(\w+)<type=(.+), name=(.+), partition=(.*), topic=(.+)><>Value
+      name: kafka_$1_$2_$3
+      type: GAUGE
+      labels:
+        partition: "$4"
+        topic: "$5"
+
+    - pattern: kafka.(\w+)<type=(.+), name=(.+), topic=(.+)><>Value
+      name: kafka_$1_$2_$3
+      type: GAUGE
+      labels:
+        topic: "$4"
+
+    - pattern: kafka.(\w+)<type=(.+), name=(.+)><>Value
+      name: kafka_$1_$2_$3
+      type: GAUGE
+
+    # Per-request latency histograms
+    - pattern: kafka.network<type=RequestMetrics, name=(.+), request=(.+)><>(\d+)thPercentile
+      name: kafka_network_request_$1
+      type: GAUGE
+      labels:
+        request: "$2"
+        quantile: "0.$3"
+
+    - pattern: kafka.network<type=RequestMetrics, name=(.+), request=(.+)><>(Mean|StdDev)
+      name: kafka_network_request_$1_$3
+      type: GAUGE
+      labels:
+        request: "$2"
+
+    # Controller — important for cluster health
+    - pattern: kafka.controller<type=(.+), name=(.+)><>Value
+      name: kafka_controller_$1_$2
+      type: GAUGE
+
+    # Replica manager — under-replicated partitions, ISR shrinks
+    - pattern: kafka.server<type=ReplicaManager, name=(.+)><>Value
+      name: kafka_server_replicamanager_$1
+      type: GAUGE
+
+    - pattern: kafka.server<type=ReplicaManager, name=(.+)><>Count
+      name: kafka_server_replicamanager_$1_total
+      type: COUNTER

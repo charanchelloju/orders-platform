@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  REFERENCE ONLY — NOT ACTIVE
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# This file demonstrates the OLD push-based deployment pattern:
+#    CI runs `helm upgrade` directly against EKS.
+#
+# It has been DISABLED (renamed to .yml.example) because the project migrated
+# to ArgoCD's pull-based GitOps pattern:
+#    CI bumps image tag in gitops/applications/*.yaml → ArgoCD deploys.
+#
+# Kept here for:
+#   - Knowledge / interview reference
+#   - "Here's what we used to do, here's what we do now"
+#   - Easy fallback if ArgoCD is unavailable
+#
+# To re-enable: rename to deploy.yml and disable the bump-gitops job in ci.yml.
+#
+# Push vs Pull comparison:
+#
+#   PUSH (this file):              PULL (current — ArgoCD):
+#   ─────────────────              ─────────────────────────
+#   CI has K8s creds              CI just pushes Git
+#   CI runs helm upgrade          ArgoCD pulls from Git
+#   Drift not detected            Drift auto-reverted
+#   No visual dashboard           ArgoCD UI shows live state
+#   Manual trigger only           Auto-sync on Git change
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g., short SHA or 0.1.X)'
+        required: true
+        default: 'latest'
+
+env:
+  AWS_REGION: ap-south-1
+  CLUSTER_NAME: orders-platform-eks
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1                 # Deploy services sequentially
+      matrix:
+        service:
+          - order-service
+          - payment-service
+          - inventory-service
+          - notification-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Helm upgrade ${{ matrix.service }}
+        run: |
+          helm upgrade --install ${{ matrix.service }} ./helm/${{ matrix.service }} \
+            --namespace orders-platform \
+            --create-namespace \
+            --set image.repository=${{ env.ECR_REGISTRY }}/${{ matrix.service }} \
+            --set image.tag=${{ inputs.image_tag }} \
+            --wait --timeout 5m
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment ${{ matrix.service }} \
+            -n orders-platform --timeout=300s
