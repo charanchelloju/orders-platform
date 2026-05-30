@@ -22,7 +22,7 @@ spec:
         - name: image.repository
           value: 132656278058.dkr.ecr.ap-south-1.amazonaws.com/order-service
         - name: image.tag
-          value: "27306ee"
+          value: "8c10d18"
         - name: serviceAccount.annotations.eks\.amazonaws\.com/role-arn
           value: "arn:aws:iam::132656278058:role/orders-platform-order-service"
   destination:
