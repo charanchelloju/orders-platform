@@ -7,10 +7,10 @@
 
 $ErrorActionPreference = "Stop"
 
-# Use localhost via kubectl port-forward to avoid Keycloak's HTTPS-on-external check.
-# Run this before invoking the script:
-#   kubectl port-forward -n keycloak svc/keycloak 8080:80
-$KC_BASE = "http://localhost:8080/auth"
+# Uses the ALB directly. Requires the master realm to have sslRequired=NONE
+# (one-time setup via terraform apply or kcadm). Otherwise HTTPS is needed.
+$KC_HOST = "k8s-ordersplatform-e8323cc06c-1834496908.ap-south-1.elb.amazonaws.com"
+$KC_BASE = "http://$KC_HOST/auth"
 $REALM   = "orders"
 
 $secretJson = aws secretsmanager get-secret-value --secret-id orders-platform/keycloak/admin --region ap-south-1 --query SecretString --output text
@@ -71,10 +71,15 @@ if ($existing.Count -gt 0) {
     Write-Host "[ok] Created client 'orders-app'"
 }
 
+# Disable HTTPS requirement on this realm so curl can use the ALB
+Invoke-KcApi PUT "/realms/$REALM" @{ realm = $REALM; sslRequired = "NONE" }
+Write-Host "[ok] sslRequired=NONE on '$REALM'"
+
 # 4. Users + role assignments
+# firstName/lastName satisfy Keycloak 24's VERIFY_PROFILE required action
 $users = @(
-    @{ username = "alice"; password = "alice"; email = "alice@example.com"; roles = @("USER", "ORDERS_WRITE", "ORDERS_READ") }
-    @{ username = "bob";   password = "bob";   email = "bob@example.com";   roles = @("USER", "ORDERS_READ") }
+    @{ username = "alice"; password = "alice"; email = "alice@example.com"; firstName = "Alice"; lastName = "Anderson"; roles = @("USER", "ORDERS_WRITE", "ORDERS_READ") }
+    @{ username = "bob";   password = "bob";   email = "bob@example.com";   firstName = "Bob";   lastName = "Brown";    roles = @("USER", "ORDERS_READ") }
 )
 
 foreach ($u in $users) {
@@ -83,7 +88,7 @@ foreach ($u in $users) {
         $userId = $found[0].id
         Write-Host "[ok] User '$($u.username)' already exists"
     } else {
-        Invoke-KcApi POST "/realms/$REALM/users" @{ username = $u.username; email = $u.email; emailVerified = $true; enabled = $true }
+        Invoke-KcApi POST "/realms/$REALM/users" @{ username = $u.username; email = $u.email; emailVerified = $true; enabled = $true; firstName = $u.firstName; lastName = $u.lastName; requiredActions = @() }
         $userId = (Invoke-KcApi GET "/realms/$REALM/users?username=$($u.username)")[0].id
         Write-Host "[ok] Created user '$($u.username)' (id $userId)"
     }
