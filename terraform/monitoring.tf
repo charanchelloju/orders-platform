@@ -38,11 +38,11 @@ resource "helm_release" "kube_prometheus_stack" {
           retentionSize = "18GiB"
 
           # ALB sub-path routing: Prometheus is served at <alb>/prometheus.
-          # routePrefix tells the Prometheus binary to expect that prefix
-          # on incoming requests. externalUrl is used for absolute links
-          # (e.g. in alerts) — left relative since we don't know the ALB
-          # DNS at apply time.
-          externalUrl = "/prometheus"
+          # AlertManager requires a fully-qualified externalUrl with scheme
+          # (path-only fails with "invalid scheme"); Prometheus follows suit
+          # for consistency. ALB DNS is captured here for now; once Route 53
+          # + a custom domain are wired up, replace with api.<domain>.
+          externalUrl = "http://k8s-ordersplatform-e8323cc06c-1834496908.ap-south-1.elb.amazonaws.com/prometheus"
           routePrefix = "/prometheus"
 
           resources = {
@@ -153,8 +153,10 @@ resource "helm_release" "kube_prometheus_stack" {
       alertmanager = {
         enabled = true
         alertmanagerSpec = {
-          # ALB sub-path routing: AlertManager lives at <alb>/alertmanager
-          externalUrl = "/alertmanager"
+          # ALB sub-path routing: AlertManager lives at <alb>/alertmanager.
+          # externalUrl MUST be a full http(s) URL — AlertManager rejects
+          # path-only values at startup.
+          externalUrl = "http://k8s-ordersplatform-e8323cc06c-1834496908.ap-south-1.elb.amazonaws.com/alertmanager"
           routePrefix = "/alertmanager"
 
           resources = {
