@@ -1,0 +1,12 @@
+# Ingress for ArgoCD — shares the orders-platform ALB.
+#
+# Requires ArgoCD configured with server.rootpath=/argocd
+# (see terraform/argocd.tf).
+
+ingress:
+  name: argocd-ingress
+  namespace: argocd
+
+  path: /argocd
+  serviceName: argocd-server
+  servicePort: 80

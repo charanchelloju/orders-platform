@@ -1,0 +1,6 @@
+apiVersion: v2
+name: monitoring-ingress
+description: ALB Ingress for Grafana / Prometheus / AlertManager (sub-path routing)
+type: application
+version: 0.1.0
+appVersion: "1.0"

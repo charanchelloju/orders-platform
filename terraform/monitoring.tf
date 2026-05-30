@@ -37,6 +37,14 @@ resource "helm_release" "kube_prometheus_stack" {
           retention     = "15d"
           retentionSize = "18GiB"
 
+          # ALB sub-path routing: Prometheus is served at <alb>/prometheus.
+          # routePrefix tells the Prometheus binary to expect that prefix
+          # on incoming requests. externalUrl is used for absolute links
+          # (e.g. in alerts) — left relative since we don't know the ALB
+          # DNS at apply time.
+          externalUrl = "/prometheus"
+          routePrefix = "/prometheus"
+
           resources = {
             requests = { memory = "1Gi", cpu = "250m" }
             limits   = { memory = "2Gi", cpu = "1000m" }
@@ -65,8 +73,19 @@ resource "helm_release" "kube_prometheus_stack" {
       # ─── Grafana ──────────────────────────────────────────────────
       grafana = {
         enabled       = true
-        adminPassword = "admin"        # demo only — use Secrets Manager in prod
+        adminPassword = "admin" # demo only — use Secrets Manager in prod
         service       = { type = "ClusterIP" }
+
+        # ALB sub-path routing: Grafana lives at <alb>/grafana.
+        # %(protocol)s and %(domain)s are Grafana's own interpolation
+        # variables — domain is auto-discovered from the Host header,
+        # so we don't have to hard-code the ALB DNS.
+        "grafana.ini" = {
+          server = {
+            root_url            = "%(protocol)s://%(domain)s/grafana"
+            serve_from_sub_path = true
+          }
+        }
 
         # Additional datasources: Loki for logs (Prometheus is auto-added)
         additionalDataSources = [{
@@ -134,6 +153,10 @@ resource "helm_release" "kube_prometheus_stack" {
       alertmanager = {
         enabled = true
         alertmanagerSpec = {
+          # ALB sub-path routing: AlertManager lives at <alb>/alertmanager
+          externalUrl = "/alertmanager"
+          routePrefix = "/alertmanager"
+
           resources = {
             requests = { memory = "100Mi", cpu = "50m" }
             limits   = { memory = "200Mi", cpu = "200m" }

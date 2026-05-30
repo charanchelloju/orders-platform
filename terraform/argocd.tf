@@ -35,6 +35,12 @@ resource "helm_release" "argocd" {
       configs = {
         params = {
           "server.insecure" = "true"
+
+          # ALB sub-path routing: ArgoCD UI lives at <alb>/argocd
+          # rootpath = where the server expects requests
+          # basehref = prefix for UI static assets (must end with /)
+          "server.rootpath" = "/argocd"
+          "server.basehref" = "/argocd/"
         }
       }
 

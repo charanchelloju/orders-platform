@@ -1,0 +1,22 @@
+# Ingress for the monitoring stack — uses the same ALB as the services
+# via the group.name annotation (single ALB, multiple Ingresses).
+#
+# Sub-path routing requires the upstream apps to know their prefix:
+#   - Grafana: serve_from_sub_path + root_url (in terraform/monitoring.tf)
+#   - Prometheus: --web.route-prefix (in terraform/monitoring.tf)
+#   - AlertManager: --web.route-prefix (in terraform/monitoring.tf)
+
+ingress:
+  name: monitoring-ingress
+  namespace: monitoring
+
+  routes:
+    - path: /grafana
+      serviceName: kube-prometheus-stack-grafana
+      servicePort: 80
+    - path: /prometheus
+      serviceName: kube-prometheus-stack-prometheus
+      servicePort: 9090
+    - path: /alertmanager
+      serviceName: kube-prometheus-stack-alertmanager
+      servicePort: 9093
