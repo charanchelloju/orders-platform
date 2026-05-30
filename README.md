@@ -128,11 +128,70 @@ orders-platform/
 │   ├── postgres/init.sql              ← schema bootstrap
 │   ├── kafka/                         ← Strimzi K8s manifests
 │   └── kind/                          ← local k8s cluster config
-├── helm/                              ← one chart per service
-├── terraform/                         ← AWS EKS + RDS
+├── helm/                              ← Helm charts
+│   ├── order-service/
+│   ├── payment-service/
+│   ├── inventory-service/
+│   ├── notification-service/
+│   └── orders-ingress/                ← shared ALB Ingress for all 4 services
+├── gitops/applications/               ← ArgoCD Application manifests
+├── terraform/                         ← AWS EKS + RDS + ALB Controller
 ├── .github/workflows/                 ← CI/CD
 └── docs/                              ← architecture diagrams
 ```
+
+## Public access on AWS (ALB Ingress)
+
+In the `aws` profile, all 4 services are exposed publicly through a single
+internet-facing AWS Application Load Balancer using path-based routing.
+
+```
+   Internet
+      │
+      ↓ HTTP :80
+   AWS ALB (auto-created by aws-load-balancer-controller)
+   Rules:
+     /api/orders/*        → order-service:8081
+     /api/payments/*      → payment-service:8082
+     /api/inventory/*     → inventory-service:8083
+     /api/notifications/* → notification-service:8084
+      │
+      ↓
+   K8s Services (ClusterIP) → Pods
+```
+
+How it's wired together:
+
+- **Terraform** (`terraform/alb-controller.tf`) installs the AWS Load
+  Balancer Controller into `kube-system` with an IRSA-bound IAM role.
+- **Helm chart** (`helm/orders-ingress/`) renders a single `Ingress`
+  resource with 4 path-based rules.
+- **ArgoCD** syncs the chart from Git (`gitops/applications/orders-ingress.yaml`).
+- The controller watches the Ingress and provisions one ALB + one target
+  group per service, registering pod IPs directly (`target-type: ip`).
+
+Get the ALB DNS name:
+
+```bash
+kubectl get ingress -n orders-platform orders-platform-ingress \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+Then call any service through it:
+
+```bash
+ALB=$(kubectl get ingress -n orders-platform orders-platform-ingress \
+        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+curl -X POST http://$ALB/api/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"productId":"keyboard","quantity":2,"customerId":"alice"}'
+```
+
+**Phase 2 (future):** Route 53 + ACM cert for `https://api.orders-platform.dev/...`,
+and optionally AWS API Gateway in front with Cognito JWT validation +
+per-route throttling. At that point the ALB scheme flips to `internal`
+and API Gateway reaches it via a VPC Link.
 
 ## License
 

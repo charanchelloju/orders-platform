@@ -1,0 +1,6 @@
+apiVersion: v2
+name: orders-ingress
+description: Shared ALB Ingress for all orders-platform services
+type: application
+version: 0.1.0
+appVersion: "1.0"

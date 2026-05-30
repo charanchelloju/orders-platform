@@ -1,0 +1,41 @@
+# Shared ALB Ingress — one ALB fronting all 4 microservices.
+#
+# The AWS Load Balancer Controller reads this Ingress and provisions:
+#   - One internet-facing ALB
+#   - Listener on port 80 (HTTP)
+#   - 4 path-based listener rules, one per service
+#   - Target groups pointing directly to pod IPs (target-type=ip)
+#
+# Each backend service is reached at /api/<name>/* — the rules use
+# pathType: ImplementationSpecific so the path is forwarded verbatim
+# (no stripping). Services keep their existing /api/<name>/... routes.
+
+ingress:
+  name: orders-platform-ingress
+  namespace: orders-platform
+
+  # Scheme: internet-facing → ALB gets a public IP
+  # Change to "internal" when you put API Gateway in front (Phase 2)
+  scheme: internet-facing
+
+  # target-type: ip → ALB talks directly to pod IPs (skips kube-proxy,
+  # one hop fewer than instance mode). Requires VPC CNI (default on EKS).
+  targetType: ip
+
+  # Health check path used by ALB to mark pod targets healthy
+  healthCheckPath: /actuator/health
+
+  # Path rules — order matters (first match wins at the listener)
+  routes:
+    - path: /api/orders
+      serviceName: order-service-order-service
+      servicePort: 8081
+    - path: /api/payments
+      serviceName: payment-service-payment-service
+      servicePort: 8082
+    - path: /api/inventory
+      serviceName: inventory-service-inventory-service
+      servicePort: 8083
+    - path: /api/notifications
+      serviceName: notification-service-notification-service
+      servicePort: 8084

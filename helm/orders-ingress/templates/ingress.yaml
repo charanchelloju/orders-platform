@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}
+  namespace: {{ .Values.ingress.namespace }}
+  annotations:
+    # Tells the AWS Load Balancer Controller this Ingress is its job
+    kubernetes.io/ingress.class: alb
+
+    # Public vs internal ALB
+    alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.scheme }}
+
+    # Direct-to-pod targeting (faster than instance/NodePort mode)
+    alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.targetType }}
+
+    # Only HTTP listener for Phase 1; HTTPS comes with Route 53 + ACM (Phase 2)
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+
+    # ALB pings this path on each pod every 15s to mark targets healthy
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.healthCheckPath }}
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # Group annotation: lets MULTIPLE Ingress resources share ONE ALB.
+    # If you add more Ingresses later (e.g. for the monitoring namespace),
+    # use the same group name and they'll all merge onto this one ALB.
+    alb.ingress.kubernetes.io/group.name: orders-platform
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          {{- range .Values.ingress.routes }}
+          - path: {{ .path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .serviceName }}
+                port:
+                  number: {{ .servicePort }}
+          {{- end }}

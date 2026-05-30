@@ -38,9 +38,9 @@ module "eks" {
   eks_managed_node_groups = {
     workers = {
       ami_type       = "AL2_x86_64"
-      instance_types = ["t3.small"]               # ~$0.021/hour each — fits credits plan
+      instance_types = ["t3.small"] # ~$0.021/hour each — fits credits plan
       min_size       = 2
-      max_size       = 4
+      max_size       = 10
       desired_size   = 3
       disk_size      = 30
     }
