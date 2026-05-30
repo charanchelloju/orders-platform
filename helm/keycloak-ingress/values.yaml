@@ -1,0 +1,10 @@
+# Keycloak Ingress — shares the orders-platform ALB via group.name.
+# Routes /auth/* to the Keycloak service in the keycloak namespace.
+
+ingress:
+  name: keycloak-ingress
+  namespace: keycloak
+
+  path: /auth
+  serviceName: keycloak
+  servicePort: 80

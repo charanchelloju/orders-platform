@@ -39,6 +39,10 @@ spec:
               value: {{ .Values.javaOpts | quote }}
             - name: SPRING_JPA_HIBERNATE_DDL_AUTO
               value: "update"
+            {{- if .Values.keycloak.issuerUri }}
+            - name: KEYCLOAK_ISSUER_URI
+              value: {{ .Values.keycloak.issuerUri | quote }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: {{ .Values.externalSecret.secretName }}

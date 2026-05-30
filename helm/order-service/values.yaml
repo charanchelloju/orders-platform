@@ -29,6 +29,13 @@ springProfile: "aws"
 kafka:
   bootstrapServers: "kafka-cluster-kafka-bootstrap.kafka:9092"
 
+# ─── Keycloak / OIDC ──────────────────────────────────────────────────────
+# Issuer URI used by Spring Security resource server to validate JWTs.
+# Leave blank to disable auth (local dev / CI tests). When set, /api/** is
+# protected and requires a Bearer token signed by this issuer.
+keycloak:
+  issuerUri: "http://k8s-ordersplatform-e8323cc06c-1834496908.ap-south-1.elb.amazonaws.com/auth/realms/orders"
+
 # ─── ServiceAccount with IRSA ──────────────────────────────────────────────
 # The annotation links this K8s SA to an AWS IAM role.
 # Pod gets short-lived AWS credentials automatically via the EKS pod identity webhook.

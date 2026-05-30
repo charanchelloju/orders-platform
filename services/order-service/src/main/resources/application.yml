@@ -105,6 +105,13 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
+  # OAuth2 resource server. JWT issuer URI provided via env so the same
+  # build runs against Keycloak, Azure AD, Okta etc. by config alone.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
 
 app:
   kafka:
