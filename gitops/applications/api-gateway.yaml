@@ -21,7 +21,7 @@ spec:
         - name: image.repository
           value: 132656278058.dkr.ecr.ap-south-1.amazonaws.com/api-gateway
         - name: image.tag
-          value: "d302f5e"
+          value: "a1c4a06"
   destination:
     server: https://kubernetes.default.svc
     namespace: orders-platform
