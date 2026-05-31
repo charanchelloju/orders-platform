@@ -32,22 +32,22 @@ spring:
 
       routes:
         - id: order-service
-          uri: http://order-service-order-service.orders-platform.svc.cluster.local
+          uri: http://order-service-order-service.orders-platform.svc.cluster.local:8081
           predicates:
             - Path=/api/orders/**
 
         - id: payment-service
-          uri: http://payment-service-payment-service.orders-platform.svc.cluster.local
+          uri: http://payment-service-payment-service.orders-platform.svc.cluster.local:8082
           predicates:
             - Path=/api/payments/**
 
         - id: inventory-service
-          uri: http://inventory-service-inventory-service.orders-platform.svc.cluster.local
+          uri: http://inventory-service-inventory-service.orders-platform.svc.cluster.local:8083
           predicates:
             - Path=/api/inventory/**
 
         - id: notification-service
-          uri: http://notification-service-notification-service.orders-platform.svc.cluster.local
+          uri: http://notification-service-notification-service.orders-platform.svc.cluster.local:8084
           predicates:
             - Path=/api/notifications/**
 
