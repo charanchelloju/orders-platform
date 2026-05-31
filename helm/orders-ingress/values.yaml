@@ -33,5 +33,5 @@ ingress:
   # directly from outside the cluster.
   routes:
     - path: /api
-      serviceName: api-gateway
+      serviceName: api-gateway-api-gateway
       servicePort: 8080
