@@ -23,11 +23,12 @@ spring:
   cloud:
     gateway:
       default-filters:
-        # Per-user rate limit: 100 req/min sustained, 200 burst
+        # Per-user rate limit. Modest defaults so the burst test in the
+        # README clearly trips HTTP 429. Tune up for real workloads.
         - name: RequestRateLimiter
           args:
-            redis-rate-limiter.replenishRate: 100
-            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.replenishRate: 10
+            redis-rate-limiter.burstCapacity: 20
             key-resolver: "#{@userKeyResolver}"
 
       routes:
