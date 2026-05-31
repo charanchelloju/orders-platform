@@ -1,0 +1,64 @@
+replicaCount: 2
+
+image:
+  repository: api-gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+
+springProfile: "aws"
+
+# Keycloak issuer URI for JWT validation (same as the order-service uses).
+# Swap to Azure AD by changing this to:
+#   https://login.microsoftonline.com/<tenant-id>/v2.0
+# (and update SecurityConfig role claim path from realm_access.roles to roles).
+keycloak:
+  issuerUri: "http://k8s-ordersplatform-e8323cc06c-1834496908.ap-south-1.elb.amazonaws.com/auth/realms/orders"
+
+redis:
+  host: "redis-master.orders-platform.svc.cluster.local"
+  port: 6379
+
+probes:
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 15
+    periodSeconds: 5
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: /actuator/prometheus
+  prometheus.io/port: "8080"
+
+# ServiceMonitor for kube-prometheus-stack
+serviceMonitor:
+  enabled: true
+  path: /actuator/prometheus
+  interval: 30s
+  scrapeTimeout: 10s
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70

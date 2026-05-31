@@ -1,0 +1,6 @@
+apiVersion: v2
+name: redis
+description: In-cluster Redis used by api-gateway for per-user rate limiting
+type: application
+version: 0.1.0
+appVersion: "7.2"

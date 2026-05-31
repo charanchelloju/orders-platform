@@ -1,0 +1,90 @@
+# Default profile - local dev (Keycloak via docker-compose, in-memory Redis usually skipped)
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # OAuth2 resource server - validates JWTs against Keycloak's JWKS endpoint.
+  # In the "aws" profile this is overridden to point at the in-cluster ALB hostname.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/auth/realms/orders
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
+  cloud:
+    gateway:
+      default-filters:
+        # Per-user rate limit: 100 req/min sustained, 200 burst
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            key-resolver: "#{@userKeyResolver}"
+
+      routes:
+        - id: order-service
+          uri: http://order-service-order-service.orders-platform.svc.cluster.local
+          predicates:
+            - Path=/api/orders/**
+
+        - id: payment-service
+          uri: http://payment-service-payment-service.orders-platform.svc.cluster.local
+          predicates:
+            - Path=/api/payments/**
+
+        - id: inventory-service
+          uri: http://inventory-service-inventory-service.orders-platform.svc.cluster.local
+          predicates:
+            - Path=/api/inventory/**
+
+        - id: notification-service
+          uri: http://notification-service-notification-service.orders-platform.svc.cluster.local
+          predicates:
+            - Path=/api/notifications/**
+
+        # /auth/** forwarded to Keycloak so login still flows through the gateway.
+        # Keycloak is exposed by a separate ALB Ingress in production - this route
+        # is here for local-dev convenience only.
+        - id: keycloak
+          uri: http://keycloak.keycloak.svc.cluster.local
+          predicates:
+            - Path=/auth/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+---
+# AWS profile - production-style deployment on EKS
+spring:
+  config:
+    activate:
+      on-profile: aws
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # ALB DNS used because JWTs are issued with this hostname as the iss claim.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-master.orders-platform.svc.cluster.local}
+      port: ${REDIS_PORT:6379}

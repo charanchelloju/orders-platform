@@ -1,5 +1,5 @@
 locals {
-  services = ["order-service", "payment-service", "inventory-service", "notification-service"]
+  services = ["order-service", "payment-service", "inventory-service", "notification-service", "api-gateway"]
 }
 
 resource "aws_ecr_repository" "service" {

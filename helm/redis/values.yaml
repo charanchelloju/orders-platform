@@ -1,0 +1,14 @@
+# Tiny in-cluster Redis sized for rate-limit counters only.
+# Production would use ElastiCache or Redis Operator instead.
+
+image:
+  repository: redis
+  tag: "7.2-alpine"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

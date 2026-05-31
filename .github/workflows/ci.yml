@@ -30,6 +30,7 @@ jobs:
           - payment-service
           - inventory-service
           - notification-service
+          - api-gateway
 
     outputs:
       short_sha: ${{ steps.meta.outputs.short_sha }}
@@ -106,7 +107,7 @@ jobs:
         env:
           SHA: ${{ needs.build-and-test.outputs.short_sha }}
         run: |
-          for svc in order-service payment-service inventory-service notification-service; do
+          for svc in order-service payment-service inventory-service notification-service api-gateway; do
             FILE="gitops/applications/$svc.yaml"
             yq -i "
               (.spec.source.helm.parameters[]

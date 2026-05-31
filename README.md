@@ -229,6 +229,34 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath='{.data.password}' | base64 -d
 ```
 
+## Authentication architecture (two patterns coexisting)
+
+The project ships both auth patterns side by side so the same JWT can be
+validated either by each backend service (Pattern 1) or once at an edge
+gateway (Pattern 2). Toggle via the `keycloak.issuerUri` Helm value on
+the backend service.
+
+```
+                        Pattern 1                      Pattern 2
+                  (per-service Security)         (centralized gateway)
+                  ─────────────────────         ─────────────────────
+   Browser              ↓ JWT                            ↓ JWT
+   ALB           /api/orders/* ─→ order-svc       /api/** ─→ api-gateway
+                  (Spring Sec. validates)         (validates, rate limits,
+                                                   injects X-User-* headers)
+                                                            ↓
+                                                  order-svc, payment-svc,
+                                                  inventory-svc, notification
+                                                  (trust headers, no JWT logic)
+```
+
+**When to pick which:**
+- Pattern 1 = small teams, < 10 services, no extra hop, every service handles its own auth.
+- Pattern 2 = 10+ services, central rate limit, IdP swap in one place.
+
+Both backed by the same Keycloak in this repo - changing the IdP (to
+Azure AD, Okta, etc.) is a one-line `issuer-uri` change in either layer.
+
 ## Authentication (Keycloak + Spring Security)
 
 `order-service` validates Bearer JWTs against Keycloak running in the same
@@ -323,6 +351,80 @@ Update the role mapping in `SecurityConfig.java` from `realm_access.roles`
 to `roles` (Azure AD app roles), rename app roles to match the existing
 `@PreAuthorize` constants, and the migration is done. No business code
 changes.
+
+## Spring Cloud Gateway (Pattern 2)
+
+Adds a Spring Cloud Gateway pod in front of the backend services. Same
+Keycloak JWT, validated once at the gateway. The gateway:
+
+1. Validates the Bearer JWT against Keycloak's JWKS endpoint.
+2. Strips the `Authorization` header.
+3. Injects user identity downstream:
+   - `X-User-Id`      (JWT sub)
+   - `X-User-Name`    (preferred_username)
+   - `X-User-Email`   (email)
+   - `X-User-Roles`   (comma-joined realm roles)
+4. Rate limits **per user** using a Redis token bucket - 100 req/min
+   sustained, 200 burst.
+5. Routes by path to the in-cluster Service of each backend.
+
+```
+   Browser ─→ ALB :80 ─→ api-gateway (validates JWT, rate-limit, headers)
+                              ↓ plain HTTP, no JWT
+                          ┌────┴───────────────────────────┐
+                          ↓               ↓                ↓
+                       order-svc    payment-svc      inventory-svc
+                      (X-User-*)    (X-User-*)        (X-User-*)
+```
+
+### Files
+
+- [services/api-gateway/](services/api-gateway/) - Spring Boot 3.3 + Spring
+  Cloud Gateway 2023.0, reactive Spring Security resource server, Redis
+  rate-limit filter, `HeaderInjectionFilter` global filter.
+- [helm/api-gateway/](helm/api-gateway/) - chart deployed via ArgoCD.
+- [helm/redis/](helm/redis/) - tiny in-cluster Redis (rate-limit counters only).
+- [helm/orders-ingress/values.yaml](helm/orders-ingress/values.yaml) -
+  single ALB rule now sends all `/api/**` to the gateway.
+
+### Backend services in Pattern 2 mode
+
+Leave `keycloak.issuerUri` set and the service still validates the JWT
+itself (Pattern 1 - belt and suspenders). Set it to an empty string and
+the existing `SecurityConfig` swaps to its open `SecurityFilterChain`,
+trusting the `X-User-*` headers from the gateway. The toggle is one Helm
+value, no code change.
+
+### Rate limit behaviour
+
+Each authenticated user gets their own token bucket keyed by `sub`. Burst
+above the limit returns `HTTP 429 Too Many Requests` with `X-RateLimit-*`
+headers. Anonymous traffic shares one bucket so a missing JWT can't
+bypass per-user limits.
+
+### Demo
+
+```bash
+ALB=k8s-ordersplatform-e8323cc06c-1834496908.ap-south-1.elb.amazonaws.com
+
+# Get alice's JWT (Keycloak)
+TOKEN=$(curl -s -X POST "http://$ALB/auth/realms/orders/protocol/openid-connect/token" \
+  -d grant_type=password -d client_id=orders-app \
+  -d username=alice -d password=alice | jq -r .access_token)
+
+# Same /api/orders endpoint - now routed through the gateway
+curl -X POST "http://$ALB/api/orders" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"customerId":"alice","productId":"keyboard","quantity":2}'
+
+# Burst test - 250 calls in a row, expect 429 once the bucket runs out
+for i in $(seq 1 250); do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    -H "Authorization: Bearer $TOKEN" \
+    "http://$ALB/api/orders" &
+done | sort | uniq -c
+```
 
 ## Serverless: weekly order archival
 

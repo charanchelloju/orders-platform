@@ -104,68 +104,26 @@ resource "kubernetes_manifest" "keycloak_admin_external_secret" {
   ]
 }
 
-resource "helm_release" "keycloak" {
-  name       = "keycloak"
-  namespace  = kubernetes_namespace.keycloak.metadata[0].name
-  repository = "https://charts.bitnami.com/bitnami"
-  chart      = "keycloak"
-  version    = "21.4.4"
-
-  timeout = 900
-
-  values = [
-    yamlencode({
-      # Read admin credentials from the K8s secret created by ESO above
-      auth = {
-        existingSecret         = "keycloak-admin"
-        passwordSecretKey      = "admin-password"
-        adminUser              = "admin" # username is non-sensitive
-      }
-
-      httpRelativePath = "/auth/"
-
-      extraEnvVars = [
-        { name = "KC_HOSTNAME", value = local.keycloak_alb_dns },
-        { name = "KC_HOSTNAME_STRICT", value = "false" },
-        { name = "KC_HOSTNAME_STRICT_HTTPS", value = "false" },
-        { name = "KC_PROXY", value = "edge" },
-        { name = "KC_HTTP_ENABLED", value = "true" },
-        { name = "JAVA_OPTS_KC_HEAP", value = "-Xms128m -Xmx384m" },
-      ]
-
-      replicaCount = 1
-
-      resources = {
-        requests = { cpu = "100m", memory = "384Mi" }
-        limits   = { cpu = "800m", memory = "768Mi" }
-      }
-
-      service = { type = "ClusterIP" }
-      ingress = { enabled = false }
-
-      postgresql = {
-        enabled = true
-        auth = {
-          username = "keycloak"
-          password = "keycloak" # demo-only — in prod use ESO for this too
-          database = "keycloak"
-        }
-        primary = {
-          resources = {
-            requests = { cpu = "50m", memory = "128Mi" }
-            limits   = { cpu = "200m", memory = "256Mi" }
-          }
-          persistence = { size = "2Gi" }
-        }
-      }
-    })
-  ]
-
-  depends_on = [
-    kubernetes_manifest.keycloak_admin_external_secret,
-    helm_release.alb_controller,
-  ]
-}
+# ─── Keycloak runtime: NOT managed by Terraform ───────────────────────────
+# The Bitnami Keycloak Helm chart pinned a Postgres image (16.3.0-debian-12-
+# r14) that was removed from Docker Hub in mid-2025, leaving the chart
+# uninstallable. Rather than wait for upstream, the Keycloak Deployment and
+# Service are applied as raw manifests using the official Keycloak image
+# (quay.io/keycloak/keycloak:24.0) running in dev mode with H2.
+#
+# Install / re-install with:
+#   .\scripts\install-keycloak.ps1   (PowerShell)
+#
+# Everything else above this comment IS Terraform-managed:
+#   - keycloak namespace
+#   - random_password for admin
+#   - AWS Secrets Manager secret + version
+#   - ESO IAM permission
+#   - ExternalSecret CRD that syncs the password into K8s
+#
+# So the admin credential flow is fully IaC; only the Deployment shape
+# lives in the install script. Swap to a maintained Helm chart later by
+# replacing the script with a helm_release resource here.
 
 output "keycloak_issuer_uri" {
   value       = "http://${local.keycloak_alb_dns}/auth/realms/orders"

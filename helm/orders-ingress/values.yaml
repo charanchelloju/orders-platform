@@ -26,16 +26,12 @@ ingress:
   healthCheckPath: /actuator/health
 
   # Path rules — order matters (first match wins at the listener)
+  #
+  # Phase 2: ALB sends ALL /api/** traffic to the api-gateway. The gateway
+  # validates the JWT, enforces rate limits, and forwards to the right
+  # backend service via internal K8s DNS. Backends are no longer reached
+  # directly from outside the cluster.
   routes:
-    - path: /api/orders
-      serviceName: order-service-order-service
-      servicePort: 8081
-    - path: /api/payments
-      serviceName: payment-service-payment-service
-      servicePort: 8082
-    - path: /api/inventory
-      serviceName: inventory-service-inventory-service
-      servicePort: 8083
-    - path: /api/notifications
-      serviceName: notification-service-notification-service
-      servicePort: 8084
+    - path: /api
+      serviceName: api-gateway
+      servicePort: 8080
