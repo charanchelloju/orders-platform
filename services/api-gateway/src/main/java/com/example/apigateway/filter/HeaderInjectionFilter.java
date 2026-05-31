@@ -63,7 +63,9 @@ public class HeaderInjectionFilter implements GlobalFilter, Ordered {
                 if (username != null) h.set("X-User-Name", username);
                 if (email != null)    h.set("X-User-Email", email);
                 h.set("X-User-Roles", rolesFinal);
-                h.remove("Authorization");
+                // Authorization is KEPT so backends running in Pattern 1 mode
+                // (Spring Security per service) can re-validate the JWT.
+                // Pattern 2 backends (header-trust only) just ignore it.
             }))
             .build();
     }
